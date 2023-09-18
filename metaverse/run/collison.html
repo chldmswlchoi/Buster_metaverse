@@ -1,0 +1,248 @@
+<!doctype html> 
+<html lang="en"> 
+<head> 
+    <meta charset="UTF-8" />
+    <title>링크타운 메타버스</title>
+     <!-- Phaser 3 라이브러리를 CDN에서 가져옴 -->
+    <script src="//cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.js"></script>
+    <style type="text/css">
+        body {
+            margin: 0;  
+            /* <!-- 페이지의 마진을 없앱니다 --> */
+        }
+    </style>
+</head>
+<body>
+
+<script type="text/javascript">
+
+
+//게임 구성 설정 ex) 크기, 기본 장면 등..
+var config = { 
+  type: Phaser.AUTO, 
+    width: window.innerWidth , 
+    height: window.innerHeight, 
+  parent: "game-container", // 캔버스가 추가될 DOM 요소의 ID
+  scene: {
+    preload: preload,
+    create: create,
+    update: update
+  },
+  physics: {
+    default: "arcade",// 아케이드 물리 시스템 사용
+    arcade: {
+      gravity: { y: 1} // 중력 없음 (위아래로 게임)
+    }
+  }
+};
+
+
+let cursors;
+let player;
+let showDebug = false;
+var game = new Phaser.Game(config); // Phaser 게임 인스턴스 생성
+
+function preload () // 에셋을 로드 하는 함수 ( 에셋 모음과, 이 에셋을 맵에 어떻게 배치할지에 대한 정보가 json형태로 되어 있음 )
+{
+    //게임에 사용되는 에셋을 미리 로드 하는 부분
+    //첫번째는 해당 에셋의 키이다. 에셋에 접근할 때 해당 키로 접근함    
+    this.load.image("basicAsset", "../asset/tileset/Modern_Exteriors_Complete_Tileset_32x32.png");
+    this.load.image("collisionAsset", "../asset/tileset/collision.png");
+    this.load.image("logoAsset", "../asset/logo/LinkTown.png");
+    this.load.image("aboveBoxAsset", "../asset/tileset/abovePlayerBox.png");
+
+    this.load.tilemapTiledJSON("map", "../asset/map/sadang1.json"); // 게임 맵의 레이아웃 및 속성에 대한 정보가 json으로 담겨있음
+    this.load.atlas("atlas", "../asset/atlas/atlas.png","../asset/atlas/atlas.json"); 
+  
+}
+
+function create ()
+{
+
+  window.addEventListener('resize', () => { // 윈도우 창 크기에 따른 맵 크기 조절
+      game.scale.resize(window.innerWidth, window.innerHeight);
+    });
+  // this.physics.world.setBounds(0, 0, 2336, 1440); //메타버스 최대 크기 설정(x, y, width, height)
+
+    const map = this.make.tilemap({ key: "map" });
+
+  // 맵의 가로 세로 픽셀 값을 확인
+  const mapWidthInPixels = map.widthInPixels;
+  const mapHeightInPixels = map.heightInPixels;
+  console.log(mapWidthInPixels,mapHeightInPixels);
+
+    
+
+// 매개변수 : Tiled 프로그램에서 저장한 asset 이미지의 파일명, 프리로드메서드에서 타일셋에 지정한 키
+const basicAsset = map.addTilesetImage("allTileSet", "basicAsset");
+const collisionAsset = map.addTilesetImage("collision", "collisionAsset");
+const logoAsset = map.addTilesetImage("Logo", "logoAsset");
+const abovePlayerAsset = map.addTilesetImage("abovePlayerBox", "aboveBoxAsset");
+
+
+// Parameters: layer name (or index) from Tiled, tileset, x, y 
+// 매개변수 : Tiled 프로그램의 레이어 파일명, 타일셋정보가 저장되어 있는 변수, x,y
+
+const baseLayer = map.createLayer("base", basicAsset, 0, 0);
+const groundLayer = map.createLayer("ground", basicAsset, 0, 0);
+const groundDecoLayer = map.createLayer("ground_deco", basicAsset, 0, 0);
+const objectLayer = map.createLayer("object", basicAsset, 0, 0);
+const mainBuildingLayer = map.createLayer("mainBuilding", basicAsset, 0, 0);
+const buildingFrontLayer = map.createLayer("building_front", basicAsset, 0, 0);
+const collisionLayer = map.createLayer("collisions",collisionAsset , 0, 0);
+const logoLayer = map.createLayer("logo",logoAsset , 0, 0);
+const aboveBox = map.createLayer("aboveBox",abovePlayerAsset , 0, 0);
+const abovePlayerLayer = map.createLayer("abovePlayer", basicAsset, 0, 0);
+
+
+collisionLayer.setCollisionByExclusion([-1]);
+
+abovePlayerLayer.setDepth(10);
+
+// 유저가 스폰되는 지역 설정
+const spawnPoint = map.findObject("Objects", obj => obj.name === "Spawn Point");
+console.log(spawnPoint);
+player = this.physics.add
+    .sprite(spawnPoint.x, spawnPoint.y, "atlas", "misa-front")
+    .setSize(30, 40)
+    .setOffset(0, 0);
+
+this.physics.add.collider(player, collisionLayer); // 충돌 레이어와 유저가 충돌 될 수 있도록 처리
+
+
+// 키보드 입력에 따른 유저 캐릭터 움직임 설정
+const anims = this.anims;
+  anims.create({
+    key: "misa-left-walk",
+    frames: anims.generateFrameNames("atlas", {
+      prefix: "misa-left-walk.",
+      start: 0,
+      end: 3,
+      zeroPad: 3,
+    }),
+    frameRate: 10,
+    repeat: -1,
+  });
+  anims.create({
+    key: "misa-right-walk",
+    frames: anims.generateFrameNames("atlas", {
+      prefix: "misa-right-walk.",
+      start: 0,
+      end: 3,
+      zeroPad: 3,
+    }),
+    frameRate: 10,
+    repeat: -1,
+  });
+  anims.create({
+    key: "misa-front-walk",
+    frames: anims.generateFrameNames("atlas", {
+      prefix: "misa-front-walk.",
+      start: 0,
+      end: 3,
+      zeroPad: 3,
+    }),
+    frameRate: 10,
+    repeat: -1,
+  });
+  anims.create({
+    key: "misa-back-walk",
+    frames: anims.generateFrameNames("atlas", {
+      prefix: "misa-back-walk.",
+      start: 0,
+      end: 3,
+      zeroPad: 3,
+    }),
+    frameRate: 10,
+    repeat: -1,
+  });
+
+  //  카메라 설정
+  const camera = this.cameras.main;
+  camera.setBounds(0, 0, map.widthInPixels, map.heightInPixels); //카메라 최대 크기 설정(x, y, width, height)
+  camera.setZoom(1); //no zoom
+  camera.centerOn(0, 0); 
+  camera.startFollow(player);
+
+  cursors = this.input.keyboard.createCursorKeys();
+
+  // 화면에서 "고정" 위치가 있는 도움말 텍스트
+  this.add
+    .text(16, 16, 'Arrow keys to move\nPress "D" to show hitboxes', {
+      font: "18px monospace",
+      fill: "#000000",
+      padding: { x: 20, y: 10 },
+      backgroundColor: "#ffffff",
+    })
+    .setScrollFactor(0)
+    .setDepth(30);
+
+  // Debug graphics
+  this.input.keyboard.once("keydown-D", (event) => {
+    // Turn on physics debugging to show player's hitbox
+    this.physics.world.createDebugGraphic();
+
+    // Create worldLayer collision graphic above the player, but below the help text
+    const graphics = this.add.graphics().setAlpha(0.75).setDepth(20);
+    worldLayer.renderDebug(graphics, {
+      tileColor: null, // Color of non-colliding tiles
+      collidingTileColor: new Phaser.Display.Color(243, 134, 48, 255), // Color of colliding tiles
+      faceColor: new Phaser.Display.Color(40, 39, 37, 255), // Color of colliding face edges
+    });
+  });
+
+}
+
+function update(time, delta) {
+  const speed = 300;
+  const prevVelocity = player.body.velocity.clone();
+
+  // Stop any previous movement from the last frame
+  player.body.setVelocity(0);
+
+// Normalize and scale the velocity so that player can't move faster along a diagonal
+// player.body.velocity.normalize().scale(speed);
+
+  // Horizontal movement
+  if (cursors.left.isDown) {
+    player.body.setVelocityX(-speed);
+  } else if (cursors.right.isDown) {
+    player.body.setVelocityX(speed);
+  }
+
+  // Vertical movement
+  if (cursors.up.isDown) {
+    player.body.setVelocityY(-speed);
+  } else if (cursors.down.isDown) {
+    player.body.setVelocityY(speed);
+  }
+
+  // Normalize and scale the velocity so that player can't move faster along a diagonal
+  player.body.velocity.normalize().scale(speed);
+
+  // Update the animation last and give left/right animations precedence over up/down animations
+  if (cursors.left.isDown) {
+    player.anims.play("misa-left-walk", true);
+  } else if (cursors.right.isDown) {
+    player.anims.play("misa-right-walk", true);
+  } else if (cursors.up.isDown) {
+    player.anims.play("misa-back-walk", true);
+  } else if (cursors.down.isDown) {
+    player.anims.play("misa-front-walk", true);
+  } else {
+    player.anims.stop();
+
+    // If we were moving, pick and idle frame to use
+    if (prevVelocity.x < 0) player.setTexture("atlas", "misa-left");
+    else if (prevVelocity.x > 0) player.setTexture("atlas", "misa-right");
+    else if (prevVelocity.y < 0) player.setTexture("atlas", "misa-back");
+    else if (prevVelocity.y > 0) player.setTexture("atlas", "misa-front");
+  }
+}
+
+
+
+</script>
+
+</body>
+</html>
